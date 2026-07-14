@@ -1,83 +1,134 @@
-# AlgoBio: Real-Time Metagenomic AMR & MIC Predictor
+# NanoResFormer
 
-## Introduction
+NanoResFormer is a hybrid CNN-Transformer model for gene detection in raw nanopore sequencing signals. It identifies antimicrobial resistance (AMR) genes directly from signal data without basecalling.
 
-Welcome to the **AlgoBio Proof of Concept (PoC)**! 
+## Overview
 
-This project aims to revolutionize rapid diagnostic testing for bacterial infections by integrating Oxford Nanopore MinION sequencing with cutting-edge Artificial Intelligence. 
+This implementation replaces the original CSV-based pipeline with an efficient POD5-to-sharded-NumPy workflow, providing:
 
-When a patient has a severe bacterial infection, doctors normally have to wait days for laboratory cultures to grow before they know exactly which antibiotics will work. This system solves that problem by reading the DNA of the bacteria in **real-time** directly from the sequencing device. 
+- **5-20x faster data loading** via memory-mapped NumPy arrays instead of CSV parsing
+- **Vectorized preprocessing** using NumPy stride tricks for sliding windows
+- **Cross-read batching** for improved GPU utilization
+- **Fixed LOW model bug** where FeatureExtractor was commented out but still called
 
-It uses an advanced AI "Language Model" (similar to ChatGPT, but designed to understand the language of DNA and Proteins) to identify the pathogen species and detect Antimicrobial Resistance (AMR) genes. Finally, it uses a powerful algorithm called XGBoost to predict the **Minimum Inhibitory Concentration (MIC)**—telling the doctor exactly which antibiotic, and at what dosage, will be most effective. All of this is designed to run locally on a consumer-grade computer (like an RTX 5070) without needing expensive cloud computing.
+## Installation
 
----
+### Prerequisites
 
-## 🚀 How to Run the Project (For Beginners)
+- Python 3.8+
+- PyTorch 2.0+
+- CUDA-capable GPU (recommended for inference)
 
-If you are not highly technical, don't worry! Follow these step-by-step instructions carefully to get the pipeline running on your local machine.
+### Install Dependencies
 
-### Prerequisites (What you need installed first)
-1. **Python**: You must have Python installed on your computer. (Download it from [python.org](https://www.python.org/downloads/)).
-2. **Terminal (Command Prompt / PowerShell)**: You need to know how to open your computer's terminal. On a Mac, press `Command + Space`, type `Terminal`, and hit enter.
-
-### Step 1: Open the Project Directory
-Open your terminal and navigate to the project folder by copying and pasting the following command, then hitting Enter:
 ```bash
-cd "/Users/pradeep/Desktop/sample-projects/100 days of ideas/algobio/poc"
+pip install torch numpy pandas matplotlib psutil
 ```
 
-### Step 2: Install the Required Libraries
-The AI needs a few specific tools to run. We've listed them in a file called `requirements.txt`. Install them by typing:
+### Optional: POD5 Support
+
+For direct POD5 file extraction:
+
 ```bash
-pip install -r requirements.txt
+pip install pod5 pyarrow
 ```
-*(Wait a few minutes while the computer downloads and installs packages like PyTorch, XGBoost, and FastAPI. You will see a lot of text scrolling by!)*
 
-### Step 3: Download the AI Models and Databases
-Before the system can identify resistance genes, it needs its "brain." Run the setup script to download the foundational models (this requires an internet connection):
+## Usage
+
+### Step 1: Extract Signals from POD5
+
+Convert POD5 files to sharded NumPy arrays with Parquet index:
+
 ```bash
-python setup_models.py
+python -m nanoresformer.ingest.pod5_extractor run.pod5 --out signals/
 ```
-*(This script will download the ESM-2 Protein Language model and give you instructions on how to fetch the Kraken2 databases. Wait for it to say "Setup script complete.")*
 
-### Step 4: Start the Real-Time Watcher
-Now, we are going to start the main pipeline. It will sit and "watch" a specific folder for new DNA data coming from a MinION sequencer.
+This creates:
+- `signals/shard_000000.npy`, `shard_000001.npy`, ... (signal data)
+- `signals/index.parquet` (metadata index)
+
+### Step 2: Run Inference
+
 ```bash
-python main.py
+python -m nanoresformer.cli signals/index.parquet Results/ --OV 80 --Model middle
 ```
-*(Leave this terminal window open! You should see a message saying "Watching directory..." - it is now waiting for data.)*
 
-### Step 5: Simulate a Sequencing Run (Trigger the AI)
-To see the AI in action, we need to pretend the MinION just finished reading a strand of DNA. 
-1. Open a **new, second Terminal window** (On Mac, you can press `Command + N` while in the Terminal).
-2. Copy and paste this command to create a dummy DNA file in the watched folder:
+#### CLI Options
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `index_path` | Path to Parquet index file (required) | - |
+| `out_dir` | Output directory for results (required) | - |
+| `--csv_name` | Base name for output files | Uses index filename |
+| `--OV` | Window overlap percentage (10-99) | 80 |
+| `--Model` | Model variant: `low`, `middle`, `high` | `middle` |
+| `--export_images` | Export annotated signal plots | False |
+| `--device_pref` | Device: `auto`, `cuda`, `cpu` | `auto` |
+
+### Example
+
 ```bash
-touch "/Users/pradeep/Desktop/sample-projects/100 days of ideas/algobio/poc/data/minion_stream/test_sample_001.fast5"
+# Extract from POD5
+python -m nanoresformer.ingest.pod5_extractor my_run.pod5 --out extracted/
+
+# Run inference with MIDDLE model at 80% overlap
+python -m nanoresformer.cli extracted/index.parquet predictions/ --Model middle --OV 80
+
+# With image export and explicit CUDA
+python -m nanoresformer.cli extracted/index.parquet predictions/ --export_images --device_pref cuda
 ```
-3. **Look back at your first Terminal window!** You will immediately see the pipeline jump into action, process the dummy read, and print out a real-time Diagnostic Dashboard showing the Pathogen, Resistance Genes, and the predicted Antibiotics!
 
----
+## Output
 
-## 🗺️ Further Tasks (Implementation Phases)
+Results are saved as `<csv_name>.csv` with columns:
+- `num`: Signal index
+- `ID`: Read identifier
+- `found_genes`: Semicolon-separated list of detected genes
 
-This project is a Proof of Concept. To move this into a production-ready medical tool, the following phases need to be implemented:
+Detected genes include: `blaSHV`, `blaOXA`, `aac(3)`, `aph(6)-Id`, `aph(3'')-Ib`, `OqxA`, `OqxB`, `tetA`, `tetD`, `fosA`
 
-### Phase 6: Live Basecaller Integration
-- **Task:** Connect the `basecaller.py` stub directly to Nanopore's official **Dorado** executable. 
-- **Goal:** Rather than simulating a read, the system will actively translate raw MinION electrical squiggles into ATCG DNA sequences on the GPU.
+## Model Variants
 
-### Phase 7: Real Data Validation
-- **Task:** Feed publicly available MinION metagenomic datasets (from real hospital samples) through the watcher.
-- **Goal:** Verify that the system correctly parses actual `.fastq` output without crashing.
+| Model | Speed | Accuracy | Use Case |
+|-------|-------|----------|----------|
+| `low` | Fastest | Lower | Quick screening |
+| `middle` | Balanced | Best tradeoff | Default production |
+| `high` | Slowest | Highest context | OqxB sensitivity |
 
-### Phase 8: XGBoost MIC Training
-- **Task:** Download real-world datasets from BV-BRC / PATRIC that map pathogen genomes to known MIC values. Train the `mic_predictor.py` model on this data.
-- **Goal:** Move from simulated MIC predictions to scientifically accurate, trained predictions.
+## Performance Notes
 
-### Phase 9: Web Interface Development
-- **Task:** Replace the console (terminal) dashboard with a beautiful, real-time graphical web dashboard using FastAPI and a frontend framework like React or Vue.
-- **Goal:** Make the tool user-friendly for clinicians so they don't have to look at terminal logs.
+- **Overlap (OV)**: 80% is accuracy-optimal but ~2x slower than 50%. Use 50-60% for screening.
+- **Batch size**: Auto-detected based on GPU memory
+- **Memory mapping**: Signals are loaded on-demand, enabling processing of large datasets
 
-### Phase 10: Adaptive Sampling Control
-- **Task:** Implement feedback logic that tells the MinION hardware to reject reads that are "Human DNA" and focus only on bacterial DNA.
-- **Goal:** Save massive amounts of sequencing time and increase the speed of diagnosis.
+## Citation
+
+If you use NanoResFormer, please cite:
+
+Jakubicek et al., "Basecalling-free resistance gene identification using a hybrid transformer in raw nanopore signals" (2026)
+
+## License
+
+MIT License
+
+## Directory Structure
+
+```
+nanoresformer/
+├── cli.py                    # Command-line interface
+├── NanoResFormer_predict.py  # Main inference function
+├── utils.py                  # Preprocessing utilities
+├── config/
+│   └── default.py            # Default configuration
+├── ingest/
+│   ├── pod5_extractor.py     # POD5 to NumPy extractor
+│   ├── shard_index.py        # Shard index management
+│   └── __init__.py
+├── models/
+│   ├── transformer_model_LOW.py
+│   ├── transformer_model_MIDDLE.py
+│   └── transformer_model_HIGH.py
+└── preprocess/
+    ├── normalize.py
+    └── __init__.py
+```

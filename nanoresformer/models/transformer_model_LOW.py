@@ -100,8 +100,8 @@ class FullModel(nn.Module):
     def __init__(self, segment_length=20000, d_model=64, n_heads=8, dropout=0.1,
                  n_transformer_layers=4, num_classes=2, pretrained_path=None):
         super().__init__()
-        # self.feature_extractor = FeatureExtractor()
-        self.input_proj = nn.Linear(8, d_model) #změna modelu
+        self.feature_extractor = FeatureExtractor()
+        self.input_proj = nn.Linear(8, d_model)
         self.pos_encoder = PositionalEncoding(d_model, dropout, max_len=3000)
         self.transformer_layers = nn.ModuleList(
             [TransformerBlock(d_model, n_heads, dropout) for _ in range(n_transformer_layers)]
