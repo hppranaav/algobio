@@ -70,7 +70,11 @@ def extract_pod5_to_shards(
     print(type(reader.read_batches))
     
     for batch in reader.read_batches(**batch_kwargs):
+        i=0
+        print(f"batch: {i++}")
         for rec in batch.reads():
+            j=0
+            print(f"rec: {j++}")
             # Get calibrated signal (pA, float-ready)
             signal_pa = ( rec.signal.astype(np.float32) + rec.calibration.offset ) * rec.calibration.scale
             sig_len = len(signal_pa)
@@ -89,6 +93,7 @@ def extract_pod5_to_shards(
             
             # Save shard when full
             if len(current_shard_signals) >= shard_size:
+                print(f"Saving shard")
                 shard_filename = f"shard_{current_shard_idx:06d}.npy"
                 shard_path = os.path.join(output_dir, shard_filename)
                 
@@ -115,9 +120,11 @@ def extract_pod5_to_shards(
                 current_shard_signals = []
                 current_shard_read_ids = []
                 current_shard_lengths = []
+                print(f"Saved shard")
     
     # Save remaining signals in final shard
     if current_shard_signals:
+        print(f"Remaining shards save")
         shard_filename = f"shard_{current_shard_idx:06d}.npy"
         shard_path = os.path.join(output_dir, shard_filename)
         
@@ -139,6 +146,7 @@ def extract_pod5_to_shards(
         for i in range(len(current_shard_read_ids)):
             records[start_offset + i]['file_shard'] = shard_path
             records[start_offset + i]['offset'] = i
+        print(f"Finished saving last shard")
     
     # Save index to Parquet
     index_df = pd.DataFrame(records)
