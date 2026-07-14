@@ -1,12 +1,10 @@
-"""Ingest module for NanoResFormer - handles data loading from various formats."""
+"""Ingest module for NanoResFormer - handles data loading from POD5/sharded formats."""
 
-from .csv_legacy import read_csv_signals, validate_csv_structure, count_signals_in_csv
 from .shard_index import ShardIndex, SignalRecord
+from .pod5_extractor import extract_pod5_to_shards
 
 __all__ = [
-    "read_csv_signals", 
-    "validate_csv_structure", 
-    "count_signals_in_csv",
     "ShardIndex", 
-    "SignalRecord"
+    "SignalRecord",
+    "extract_pod5_to_shards"
 ]

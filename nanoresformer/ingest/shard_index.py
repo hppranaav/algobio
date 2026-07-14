@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
+import numpy as np
 
 
 @dataclass
@@ -35,6 +36,7 @@ class ShardIndex:
     """
     
     def __init__(self, index_path: Optional[str] = None):
+        import numpy as np
         self.records: List[SignalRecord] = []
         self.shard_files: Dict[str, Any] = {}  # shard_path -> memmapped array
         

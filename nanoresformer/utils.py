@@ -3,7 +3,6 @@ import numpy as np
 import torch
 import psutil
 import matplotlib.pyplot as plt
-import csv
 import sys
 
 
@@ -133,53 +132,3 @@ def export_image(signal_plot_arr, centers_plot, results, images_dir, num, ID, fo
     out_png = os.path.join(images_dir, f"signal_{num:08d}.png")
     plt.savefig(out_png, bbox_inches='tight')
     plt.close(fig)
-
-
-
-def validate_csv_structure(csv_path):
-    """
-    Validate the structure of the input CSV file.
-    
-    Expected format: ID[,optional_labels],*,signal_values...
-    
-    Parameters:
-        csv_path (str): Path to the CSV file to validate.
-    
-    Raises:
-        SystemExit: If validation fails.
-    """
-    with open(csv_path, 'r', newline='') as _in:
-        csv_reader = csv.reader(_in)
-        for row_num, row in enumerate(csv_reader, start=1):
-            if '*' not in row:
-                continue  # Skip rows without '*' (assumed to be header or non-signal rows)
-            
-            try:
-                star_idx = row.index('*')
-            except ValueError:
-                continue
-            
-            # Check if there's at least an ID before '*'
-            if star_idx == 0:
-                print(f"Error: Row {row_num} has no ID before '*'")
-                print("Expected structure: ID[,optional_labels],*,signal_values...")
-                print("Program terminated.")
-                sys.exit(1)
-            
-            # Check if there's at least one signal value after '*'
-            signal_values = row[star_idx + 1:]
-            if len(signal_values) == 0:
-                print(f"Error: Row {row_num} has no signal values after '*'")
-                print("Expected structure: ID[,optional_labels],*,signal_values...")
-                print("Program terminated.")
-                sys.exit(1)
-            
-            # Verify signal values are numeric
-            try:
-                for val in signal_values:
-                    float(val)
-            except ValueError:
-                print(f"Error: Row {row_num} contains non-numeric signal values after '*'")
-                print("All signal values must be valid numbers.")
-                print("Program terminated.")
-                sys.exit(1)

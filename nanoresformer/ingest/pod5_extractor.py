@@ -43,8 +43,12 @@ def extract_pod5_to_shards(
     except ImportError:
         raise ImportError("pod5 package is required. Install with: pip install pod5")
     
+    try:
+        import pandas as pd
+    except ImportError:
+        raise ImportError("pandas and pyarrow are required. Install with: pip install pandas pyarrow")
+    
     import numpy as np
-    import pandas as pd
     
     os.makedirs(output_dir, exist_ok=True)
     
@@ -54,6 +58,7 @@ def extract_pod5_to_shards(
     current_shard_idx = 0
     current_shard_signals = []
     current_shard_read_ids = []
+    current_shard_lengths = []
     
     # Use read_batches for efficient batch I/O
     batch_kwargs = {}
@@ -64,16 +69,17 @@ def extract_pod5_to_shards(
         for rec in batch:
             # Get calibrated signal (pA, float-ready)
             signal_pa = rec.calibrated_signal.astype(np.float32)
+            sig_len = len(signal_pa)
             current_shard_signals.append(signal_pa)
             current_shard_read_ids.append(rec.read_id)
+            current_shard_lengths.append(sig_len)
             
-            # Track record for index
-            offset = len(current_shard_signals) - 1
+            # Track record for index (offset will be updated when shard is saved)
             records.append({
                 'read_id': rec.read_id,
                 'file_shard': '',  # Will be filled in when shard is saved
-                'offset': offset,
-                'length': len(signal_pa),
+                'offset': -1,  # Will be updated
+                'length': sig_len,
                 'labels': None
             })
             
@@ -82,35 +88,53 @@ def extract_pod5_to_shards(
                 shard_filename = f"shard_{current_shard_idx:06d}.npy"
                 shard_path = os.path.join(output_dir, shard_filename)
                 
-                # Stack and save shard
-                shard_array = np.vstack(current_shard_signals)
+                # Pad signals to same length for stacking
+                max_len = max(current_shard_lengths)
+                padded_signals = []
+                for sig, ln in zip(current_shard_signals, current_shard_lengths):
+                    if ln < max_len:
+                        padded = np.pad(sig, (0, max_len - ln), mode='constant')
+                    else:
+                        padded = sig
+                    padded_signals.append(padded)
+                
+                shard_array = np.stack(padded_signals, axis=0)
                 np.save(shard_path, shard_array)
                 
-                # Update records with shard path
+                # Update records with shard path and offset
+                start_offset = len(records) - len(current_shard_read_ids)
                 for i in range(len(current_shard_read_ids)):
-                    for rec in records:
-                        if rec['read_id'] == current_shard_read_ids[i]:
-                            rec['file_shard'] = shard_path
-                            rec['offset'] = i
-                            break
+                    records[start_offset + i]['file_shard'] = shard_path
+                    records[start_offset + i]['offset'] = i
                 
                 current_shard_idx += 1
                 current_shard_signals = []
                 current_shard_read_ids = []
+                current_shard_lengths = []
     
     # Save remaining signals in final shard
     if current_shard_signals:
         shard_filename = f"shard_{current_shard_idx:06d}.npy"
         shard_path = os.path.join(output_dir, shard_filename)
-        shard_array = np.vstack(current_shard_signals)
+        
+        # Pad signals to same length for stacking
+        max_len = max(current_shard_lengths)
+        padded_signals = []
+        for sig, ln in zip(current_shard_signals, current_shard_lengths):
+            if ln < max_len:
+                padded = np.pad(sig, (0, max_len - ln), mode='constant')
+            else:
+                padded = sig
+            padded_signals.append(padded)
+        
+        shard_array = np.stack(padded_signals, axis=0)
         np.save(shard_path, shard_array)
         
+        # Update records with shard path and offset
+        start_offset = len(records) - len(current_shard_read_ids)
         for i in range(len(current_shard_read_ids)):
-            for rec in records:
-                if rec['read_id'] == current_shard_read_ids[i]:
-                    rec['file_shard'] = shard_path
-                    rec['offset'] = i
-                    break
+            records[start_offset + i]['file_shard'] = shard_path
+            records[start_offset + i]['offset'] = i
     
     # Save index to Parquet
     index_df = pd.DataFrame(records)
