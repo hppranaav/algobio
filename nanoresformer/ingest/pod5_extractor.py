@@ -74,7 +74,6 @@ def extract_pod5_to_shards(
     for batch in reader.read_batches(**batch_kwargs):
         print(f"batch start")
         for rec in batch.reads():
-            print(f"rec start")
             # Get calibrated signal (pA, float-ready)
             signal_pa = ( rec.signal.astype(np.float32) + rec.calibration.offset ) * rec.calibration.scale
             sig_len = len(signal_pa)
