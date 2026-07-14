@@ -64,6 +64,10 @@ def extract_pod5_to_shards(
     batch_kwargs = {}
     if preload_samples:
         batch_kwargs['preload'] = {"samples"}
+
+    print(type(reader))
+    print(reader)
+    print(type(reader.read_batches))
     
     for batch in reader.read_batches(**batch_kwargs):
         for rec in batch.reads():
