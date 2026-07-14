@@ -56,7 +56,9 @@ def extract_pod5_to_shards(
     
     records = []
     current_shard_idx = 0
-    current_shard_signals = []
+    
+    # Track current shard data
+    current_shard_signals = []  # List of signal arrays
     current_shard_read_ids = []
     current_shard_lengths = []
     
@@ -64,7 +66,7 @@ def extract_pod5_to_shards(
     batch_kwargs = {}
     if preload_samples:
         batch_kwargs['preload'] = {"samples"}
-
+    
     print(type(reader))
     print(reader)
     print(type(reader.read_batches))
@@ -96,20 +98,19 @@ def extract_pod5_to_shards(
                 shard_path = os.path.join(output_dir, shard_filename)
                 print(f"File made")
                 
-                # Pad signals to same length for stacking
+                # Find max length for padding
                 max_len = max(current_shard_lengths)
-                padded_signals = []
-                for sig, ln in zip(current_shard_signals, current_shard_lengths):
-                    if ln < max_len:
-                        padded = np.pad(sig, (0, max_len - ln), mode='constant')
-                    else:
-                        padded = sig
-                    padded_signals.append(padded)
-                print(f"Padded values")
                 
-                shard_array = np.stack(padded_signals, axis=0)
+                # Pre-allocate the shard array with proper shape and dtype
+                shard_array = np.zeros((len(current_shard_signals), max_len), dtype=np.float32)
+                
+                # Copy each signal directly into the pre-allocated array
+                for i, (sig, ln) in enumerate(zip(current_shard_signals, current_shard_lengths)):
+                    shard_array[i, :ln] = sig
+                
+                # Save the pre-allocated array directly
                 np.save(shard_path, shard_array)
-                print(f"Create np array")
+                print(f"Created np array")
                 
                 # Update records with shard path and offset
                 start_offset = len(records) - len(current_shard_read_ids)
@@ -129,17 +130,17 @@ def extract_pod5_to_shards(
         shard_filename = f"shard_{current_shard_idx:06d}.npy"
         shard_path = os.path.join(output_dir, shard_filename)
         
-        # Pad signals to same length for stacking
+        # Find max length for padding
         max_len = max(current_shard_lengths)
-        padded_signals = []
-        for sig, ln in zip(current_shard_signals, current_shard_lengths):
-            if ln < max_len:
-                padded = np.pad(sig, (0, max_len - ln), mode='constant')
-            else:
-                padded = sig
-            padded_signals.append(padded)
         
-        shard_array = np.stack(padded_signals, axis=0)
+        # Pre-allocate the shard array with proper shape and dtype
+        shard_array = np.zeros((len(current_shard_signals), max_len), dtype=np.float32)
+        
+        # Copy each signal directly into the pre-allocated array
+        for i, (sig, ln) in enumerate(zip(current_shard_signals, current_shard_lengths)):
+            shard_array[i, :ln] = sig
+        
+        # Save the pre-allocated array directly
         np.save(shard_path, shard_array)
         
         # Update records with shard path and offset
