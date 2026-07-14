@@ -1,12 +1,16 @@
+"""Utility functions for NanoResFormer."""
+
 import os
 import numpy as np
 import torch
 import psutil
 import matplotlib.pyplot as plt
 import sys
+from typing import Tuple, List, Optional
 
 
 def normalize_signal(signal):
+    """Normalize signal using z-score."""
     signal = np.array(signal, dtype=np.float32)
     mean_val = np.mean(signal)
     std_val = np.std(signal)
@@ -14,8 +18,9 @@ def normalize_signal(signal):
         return (signal - mean_val) / std_val
     return signal - mean_val
 
+
 def determine_batch_size(window_length, device_pref='auto'):
-    # decide batch size based on GPU memory (preferred) or available RAM
+    """Decide batch size based on GPU memory (preferred) or available RAM."""
     try:
         batch_size = 1
         if (device_pref in ('auto', 'cuda')) and torch.cuda.is_available():
@@ -39,36 +44,44 @@ def determine_batch_size(window_length, device_pref='auto'):
         batch_size = 1
     return int(batch_size)
 
-def pad_signal(signal, window_length):
+
+def pad_signal(signal, window_length) -> Tuple[np.ndarray, int, int]:
+    """Pad signal to ensure it's at least window_length."""
     pad_left = window_length // 2
     pad_right = window_length - pad_left - 1
     padded = np.pad(signal, (pad_left, pad_right), mode='constant')
     return padded, pad_left, pad_right
 
+
 def depad_signal(padded_signal, pad_left, pad_right):
+    """Remove padding from signal."""
     if pad_right > 0:
         return padded_signal[pad_left:-pad_right]
     return padded_signal[pad_left:]
 
+
 def model_mapping(Model):
+    """Map model variant name to class and parameters."""
     Model = Model.lower()
     if Model == "low":
-        from models.transformer_model_LOW import FullModel
+        from nanoresformer.models.transformer_model_LOW import FullModel
         model_name = "model_LOW"
         d_model = 8
     elif Model == "middle":
-        from models.transformer_model_MIDDLE import FullModel
+        from nanoresformer.models.transformer_model_MIDDLE import FullModel
         model_name = "model_MIDDLE"
         d_model = 64
     elif Model == "high":
-        from models.transformer_model_HIGH import FullModel
+        from nanoresformer.models.transformer_model_HIGH import FullModel
         model_name = "model_HIGH"
         d_model = 64
     else:
         raise ValueError("Model must be 'low', 'middle' or 'high'.")
     return FullModel, model_name, d_model
 
+
 def select_device(device_pref='auto'):
+    """Select compute device based on preference."""
     if device_pref == 'auto':
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
     elif device_pref == 'cuda':
@@ -81,7 +94,9 @@ def select_device(device_pref='auto'):
     else:
         raise ValueError("device_pref must be 'auto', 'cpu' or 'cuda'")
 
+
 def prepare_windows(signal, window_length, step):
+    """Prepare sliding windows from signal (legacy implementation)."""
     positions = []
     pos = 0
     L = len(signal)
@@ -98,7 +113,9 @@ def prepare_windows(signal, window_length, step):
         centers.append(pos + window_length // 2)
     return windows, centers
 
+
 def export_image(signal_plot_arr, centers_plot, results, images_dir, num, ID, found_genes, gene_names, label_colors, labels):
+    """Export annotated image showing signal and prediction probabilities."""
     fig, ax1 = plt.subplots(figsize=(15, 5))
     ax1.plot(range(len(signal_plot_arr)), signal_plot_arr, label='Signal', alpha=0.5)
     ax1.set_xlabel('Position in signal')

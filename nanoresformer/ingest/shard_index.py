@@ -97,8 +97,6 @@ class ShardIndex:
         np.ndarray or None
             The signal array, or None if not found.
         """
-        import numpy as np
-        
         for record in self.records:
             if record.read_id == read_id:
                 if record.file_shard not in self.shard_files:
