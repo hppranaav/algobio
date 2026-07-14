@@ -70,13 +70,9 @@ def extract_pod5_to_shards(
     print(type(reader.read_batches))
     
     for batch in reader.read_batches(**batch_kwargs):
-        i=0
-        print(f"batch: {i}")
-        i+=1
+        print(f"batch start")
         for rec in batch.reads():
-            j=0
-            print(f"rec: {j}")
-            j+=1
+            print(f"rec start")
             # Get calibrated signal (pA, float-ready)
             signal_pa = ( rec.signal.astype(np.float32) + rec.calibration.offset ) * rec.calibration.scale
             sig_len = len(signal_pa)
@@ -98,6 +94,7 @@ def extract_pod5_to_shards(
                 print(f"Saving shard")
                 shard_filename = f"shard_{current_shard_idx:06d}.npy"
                 shard_path = os.path.join(output_dir, shard_filename)
+                print(f"File made")
                 
                 # Pad signals to same length for stacking
                 max_len = max(current_shard_lengths)
@@ -108,9 +105,11 @@ def extract_pod5_to_shards(
                     else:
                         padded = sig
                     padded_signals.append(padded)
+                print(f"Padded values")
                 
                 shard_array = np.stack(padded_signals, axis=0)
                 np.save(shard_path, shard_array)
+                print(f"Create np array")
                 
                 # Update records with shard path and offset
                 start_offset = len(records) - len(current_shard_read_ids)
